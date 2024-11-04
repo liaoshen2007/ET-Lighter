@@ -7,7 +7,7 @@ namespace ET.Client
     {
         protected override async ETTask Run(Scene root, AppStartInitFinish args)
         {
-            await root.GetComponent<UIComponent>().ShowWindowAsync(WindowID.Win_UILogin);
+            await root.GetComponent<UIComponent>().ShowWindowAsync(WindowID.Win_UIGameStart);
             UnityEngine.Object.Destroy(Global.Instance.Get<GameObject>("Splash"));
         }
     }

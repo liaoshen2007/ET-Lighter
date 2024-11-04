@@ -12,6 +12,7 @@ namespace ET.Client
 			{ WindowID.Win_UIBag, new List<string>() { "Item_Bag_Left_Menu", } },
 			{ WindowID.Win_UITools, new List<string>() {} },
 			{ WindowID.Win_UIGm, new List<string>() { "Item_Gm", } },
+			{ WindowID.Win_UIGameStart, new List<string>() {} },
         };
     }
 }

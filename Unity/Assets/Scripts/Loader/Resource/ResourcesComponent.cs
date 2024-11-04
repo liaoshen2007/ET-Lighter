@@ -161,26 +161,26 @@ namespace ET.Client
 
         public async ETTask<int> InitializeAsync(string packageName)
         {
-            int errno = 0;
-            while (true)
-            {
-                errno = await AppSetting.Instance.Get();
-                if (errno != 0)
-                {
-                    Log.Error($"获取AppSetting失败");
-                    this.CheckHotPop();
-                    errno = await this.hotPop.ShowWait("网络异常, 请重试!", "确 定", "取 消");
-                    if (errno != 0)
-                    {
-                        ExitGame();
-                        return errno;
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
+            // int errno = 0;
+            // while (true)
+            // {
+            //     errno = await AppSetting.Instance.Get();
+            //     if (errno != 0)
+            //     {
+            //         Log.Error($"获取AppSetting失败");
+            //         this.CheckHotPop();
+            //         errno = await this.hotPop.ShowWait("网络异常, 请重试!", "确 定", "取 消");
+            //         if (errno != 0)
+            //         {
+            //             ExitGame();
+            //             return errno;
+            //         }
+            //     }
+            //     else
+            //     {
+            //         break;
+            //     }
+            // }
 
             ResourcePackage package = YooAssets.CreatePackage(packageName);
             YooAssets.SetDefaultPackage(package);
@@ -217,10 +217,10 @@ namespace ET.Client
                     throw new ArgumentOutOfRangeException();
             }
 
-            if (!AppSetting.Instance.HotUpdate)
-            {
-                return 0;
-            }
+            // if (!AppSetting.Instance.HotUpdate)
+            // {
+            //     return 0;
+            // }
 
             // 更新版本号
             var operation = package.UpdatePackageVersionAsync();
@@ -243,29 +243,29 @@ namespace ET.Client
             }
 
             // 创建下载器
-            if (!CreateDownloader())
-            {
-                return 0;
-            }
+            // if (!CreateDownloader())
+            // {
+            //     return 0;
+            // }
 
-            string msg = $"发现新版本，是否下载? ({this.downloaderOperation.TotalDownloadBytes / 1024f / 1024:F2}MB)";
-            this.CheckHotPop();
-            errno = await this.hotPop.ShowWait(msg, "确 定", "取 消");
-            if (errno != 0)
-            {
-                ExitGame();
-                return errno;
-            }
-
-            this.hotPop.Show("");
-            errno = await DownloadPatch();
-            if (errno != 0)
-            {
-                return errno;
-            }
-
-            this.hotPop.Release();
-            this.hotPop = null;
+            // string msg = $"发现新版本，是否下载? ({this.downloaderOperation.TotalDownloadBytes / 1024f / 1024:F2}MB)";
+            // this.CheckHotPop();
+            // errno = await this.hotPop.ShowWait(msg, "确 定", "取 消");
+            // if (errno != 0)
+            // {
+            //     ExitGame();
+            //     return errno;
+            // }
+            //
+            // this.hotPop.Show("");
+            // errno = await DownloadPatch();
+            // if (errno != 0)
+            // {
+            //     return errno;
+            // }
+            //
+            // this.hotPop.Release();
+            // this.hotPop = null;
             return 0;
         }
 
