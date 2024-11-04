@@ -8,40 +8,38 @@ namespace ET
 {
     public class WService: AService
     {
-        private long idGenerater = 200000000;
-        
+        private long idGenerate = 200000000;
+
         private HttpListener httpListener;
-        
-        private readonly Dictionary<long, WChannel> channels = new Dictionary<long, WChannel>();
+
+        private readonly Dictionary<long, WChannel> channels = new();
 
         public ThreadSynchronizationContext ThreadSynchronizationContext;
 
-        public WService(IEnumerable<string> prefixs)
+        public WService(string prefix)
         {
             this.ThreadSynchronizationContext = new ThreadSynchronizationContext();
-            
             this.httpListener = new HttpListener();
-
-            StartAccept(prefixs).NoContext();
+            StartAccept(prefix).NoContext();
         }
-        
+
         public WService()
         {
             this.ServiceType = ServiceType.Outer;
             this.ThreadSynchronizationContext = new ThreadSynchronizationContext();
         }
-        
+
         private long GetId
         {
             get
             {
-                return ++this.idGenerater;
+                return ++this.idGenerate;
             }
         }
-        
+
         public override void Create(long id, IPEndPoint ipEndpoint)
         {
-			ClientWebSocket webSocket = new();
+            ClientWebSocket webSocket = new();
             WChannel channel = new(id, webSocket, ipEndpoint, this);
             this.channels[channel.Id] = channel;
         }
@@ -53,14 +51,12 @@ namespace ET
 
         public override void Remove(long id, int error = 0)
         {
-            WChannel channel;
-            if (!this.channels.TryGetValue(id, out channel))
+            if (!this.channels.TryGetValue(id, out WChannel channel))
             {
                 return;
             }
 
             channel.Error = error;
-
             this.channels.Remove(id);
             channel.Dispose();
         }
@@ -77,43 +73,35 @@ namespace ET
                 this.Create(id, ipEndPoint);
             }
         }
-        
+
         public WChannel Get(long id)
         {
-            WChannel channel = null;
-            this.channels.TryGetValue(id, out channel);
+            this.channels.TryGetValue(id, out WChannel channel);
             return channel;
         }
 
         public override void Dispose()
         {
             base.Dispose();
-            
+
             this.ThreadSynchronizationContext = null;
             this.httpListener?.Close();
             this.httpListener = null;
         }
 
-        private async ETTask StartAccept(IEnumerable<string> prefixs)
+        private async ETTask StartAccept(string prefix)
         {
             try
             {
-                foreach (string prefix in prefixs)
-                {
-                    this.httpListener.Prefixes.Add(prefix);
-                }
-                
+                this.httpListener.Prefixes.Add(prefix);
                 httpListener.Start();
-
                 while (true)
                 {
                     try
                     {
                         HttpListenerContext httpListenerContext = await this.httpListener.GetContextAsync();
-
                         HttpListenerWebSocketContext webSocketContext = await httpListenerContext.AcceptWebSocketAsync(null);
-
-                        WChannel channel = new WChannel(this.GetId, webSocketContext, this);
+                        WChannel channel = new(this.GetId, webSocketContext, this);
                         channel.RemoteAddress = httpListenerContext.Request.RemoteEndPoint;
                         this.channels[channel.Id] = channel;
 
@@ -129,7 +117,8 @@ namespace ET
             {
                 if (e.ErrorCode == 5)
                 {
-                    throw new Exception($"CMD管理员中输入: netsh http add urlacl url=http://*:8080/ user=Everyone   {prefixs.ToList().ListToString()}", e);
+                    throw new Exception($"CMD管理员中输入: netsh http add urlacl url=http://*:8080/ user=Everyone   {prefix}",
+                        e);
                 }
 
                 Log.Error(e);
@@ -147,6 +136,7 @@ namespace ET
             {
                 return;
             }
+
             channel.Send(memoryBuffer);
         }
     }

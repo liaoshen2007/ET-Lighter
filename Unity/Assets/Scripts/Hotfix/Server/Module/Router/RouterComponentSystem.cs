@@ -13,6 +13,9 @@ namespace ET.Server
         {
             self.OuterUdp = new UdpTransport(outerAddress);
             self.OuterTcp = new TcpTransport(outerAddress);
+            string webAddress = $"http://{outerAddress.Address}:{outerAddress.Port + 10000}/";
+            self.OuterWebSocket = new WebsocketTransport(webAddress);
+            Log.Console($"Web监听地址: {webAddress}");
             self.InnerSocket = new UdpTransport(new IPEndPoint(IPAddress.Parse(innerIP), 0));
         }
 
@@ -21,6 +24,7 @@ namespace ET.Server
         {
             self.OuterUdp.Dispose();
             self.OuterTcp.Dispose();
+            self.OuterWebSocket.Dispose();
             self.InnerSocket.Dispose();
             self.IPEndPoint = null;
         }
@@ -30,10 +34,12 @@ namespace ET.Server
         {
             self.OuterUdp.Update();
             self.OuterTcp.Update();
+            self.OuterWebSocket.Update();
             self.InnerSocket.Update();
             long timeNow = TimeInfo.Instance.Now();
             self.RecvOuterUdp(timeNow);
             self.RecvOuterTcp(timeNow);
+            self.RecvOuterWebSocket(timeNow);
             self.RecvInner(timeNow);
 
             // 每秒钟检查一次
@@ -57,7 +63,7 @@ namespace ET.Server
             {
                 try
                 {
-                    int messageLength = self.OuterTcp.Recv(self.Cache, ref self.IPEndPoint);
+                    int messageLength = self.OuterTcp.Receive(self.Cache, ref self.IPEndPoint);
                     self.RecvOuterHandler(messageLength, timeNow, self.OuterTcp);
                 }
                 catch (Exception e)
@@ -74,8 +80,24 @@ namespace ET.Server
             {
                 try
                 {
-                    int messageLength = self.OuterUdp.Recv(self.Cache, ref self.IPEndPoint);
+                    int messageLength = self.OuterUdp.Receive(self.Cache, ref self.IPEndPoint);
                     self.RecvOuterHandler(messageLength, timeNow, self.OuterUdp);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e);
+                }
+            }
+        }
+
+        private static void RecvOuterWebSocket(this RouterComponent self, long timeNow)
+        {
+            while (self.OuterWebSocket != null && self.OuterWebSocket.Available() > 0)
+            {
+                try
+                {
+                    int messageLength = self.OuterWebSocket.Receive(self.Cache, ref self.IPEndPoint);
+                    self.RecvOuterHandler(messageLength, timeNow, self.OuterWebSocket);
                 }
                 catch (Exception e)
                 {
@@ -131,7 +153,7 @@ namespace ET.Server
             {
                 try
                 {
-                    int messageLength = self.InnerSocket.Recv(self.Cache, ref self.IPEndPoint);
+                    int messageLength = self.InnerSocket.Receive(self.Cache, ref self.IPEndPoint);
                     self.RecvInnerHandler(messageLength, timeNow);
                 }
                 catch (Exception e)
@@ -153,7 +175,7 @@ namespace ET.Server
             byte flag = self.Cache[0];
             switch (flag)
             {
-                case KcpProtocalType.RouterReconnectSYN:
+                case KcpProtoType.RouterReconnectSYN:
                 {
                     if (messageLength < 13)
                     {
@@ -211,7 +233,7 @@ namespace ET.Server
 
                     routerNode.KcpTransport = transport;
                     // 转发到内网
-                    self.Cache.WriteTo(0, KcpProtocalType.RouterReconnectSYN);
+                    self.Cache.WriteTo(0, KcpProtoType.RouterReconnectSYN);
                     self.Cache.WriteTo(1, outerConn);
                     self.Cache.WriteTo(5, innerConn);
                     self.InnerSocket.Send(self.Cache, 0, 9, routerNode.InnerIpEndPoint, ChannelType.Connect);
@@ -223,7 +245,7 @@ namespace ET.Server
 
                     break;
                 }
-                case KcpProtocalType.RouterSYN:
+                case KcpProtoType.RouterSYN:
                 {
                     if (messageLength < 13)
                     {
@@ -292,7 +314,7 @@ namespace ET.Server
                     }
 
                     routerNode.KcpTransport = transport;
-                    self.Cache.WriteTo(0, KcpProtocalType.RouterACK);
+                    self.Cache.WriteTo(0, KcpProtoType.RouterACK);
                     self.Cache.WriteTo(1, routerNode.InnerConn);
                     self.Cache.WriteTo(5, routerNode.OuterConn);
                     routerNode.KcpTransport.Send(self.Cache, 0, 9, routerNode.SyncIpEndPoint, ChannelType.Accept);
@@ -304,7 +326,7 @@ namespace ET.Server
 
                     break;
                 }
-                case KcpProtocalType.SYN:
+                case KcpProtoType.SYN:
                 {
                     // 长度!=13，不是accpet消息
                     if (messageLength != 9)
@@ -341,7 +363,7 @@ namespace ET.Server
                     routerNode.LastRecvOuterTime = timeNow;
                     routerNode.OuterIpEndPoint = self.CloneAddress();
                     // 转发到内网, 带上客户端的地址
-                    self.Cache.WriteTo(0, KcpProtocalType.SYN);
+                    self.Cache.WriteTo(0, KcpProtoType.SYN);
                     self.Cache.WriteTo(1, outerConn);
                     self.Cache.WriteTo(5, innerConn);
                     byte[] addressBytes = ipEndPoint.ToString().ToByteArray();
@@ -356,7 +378,7 @@ namespace ET.Server
 
                     break;
                 }
-                case KcpProtocalType.FIN: // 断开
+                case KcpProtoType.FIN: // 断开
                 {
                     // 长度!=13，不是DisConnect消息
                     if (messageLength != 13)
@@ -394,7 +416,7 @@ namespace ET.Server
 
                     break;
                 }
-                case KcpProtocalType.MSG:
+                case KcpProtoType.MSG:
                 {
                     // 长度<9，不是Msg消息
                     if (messageLength < 9)
@@ -460,7 +482,7 @@ namespace ET.Server
             byte flag = self.Cache[0];
             switch (flag)
             {
-                case KcpProtocalType.RouterReconnectACK:
+                case KcpProtoType.RouterReconnectACK:
                 {
                     uint innerConn = BitConverter.ToUInt32(self.Cache, 1);
                     uint outerConn = BitConverter.ToUInt32(self.Cache, 5);
@@ -492,7 +514,7 @@ namespace ET.Server
                     routerNode.LastRecvInnerTime = timeNow;
 
                     // 转发出去
-                    self.Cache.WriteTo(0, KcpProtocalType.RouterReconnectACK);
+                    self.Cache.WriteTo(0, KcpProtoType.RouterReconnectACK);
                     self.Cache.WriteTo(1, routerNode.InnerConn);
                     self.Cache.WriteTo(5, routerNode.OuterConn);
                     Log.Info($"kcp router RouterAck: {outerConn} {innerConn} {routerNode.SyncIpEndPoint}");
@@ -500,7 +522,7 @@ namespace ET.Server
                     break;
                 }
 
-                case KcpProtocalType.ACK:
+                case KcpProtoType.ACK:
                 {
                     uint innerConn = BitConverter.ToUInt32(self.Cache, 1); // remote
                     uint outerConn = BitConverter.ToUInt32(self.Cache, 5); // local
@@ -522,7 +544,7 @@ namespace ET.Server
                     routerNode.KcpTransport.Send(self.Cache, 0, messageLength, routerNode.OuterIpEndPoint, ChannelType.Accept);
                     break;
                 }
-                case KcpProtocalType.FIN: // 断开
+                case KcpProtoType.FIN: // 断开
                 {
                     // 长度!=13，不是DisConnect消息
                     if (messageLength != 13)
@@ -559,7 +581,7 @@ namespace ET.Server
 
                     break;
                 }
-                case KcpProtocalType.MSG:
+                case KcpProtoType.MSG:
                 {
                     // 长度<9，不是Msg消息
                     if (messageLength < 9)

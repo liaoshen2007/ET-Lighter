@@ -10,9 +10,13 @@ namespace ET
     public interface IKcpTransport: IDisposable
     {
         void Send(byte[] bytes, int index, int length, EndPoint endPoint, ChannelType channelType);
-        int Recv(byte[] buffer, ref EndPoint endPoint);
+        
+        int Receive(byte[] buffer, ref EndPoint endPoint);
+        
         int Available();
+        
         void Update();
+        
         void OnError(long id, int error);
     }
 
@@ -25,7 +29,7 @@ namespace ET
             this.socket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
             NetworkHelper.SetSioUdpConnReset(this.socket);
         }
-        
+
         public UdpTransport(IPEndPoint ipEndPoint)
         {
             this.socket = new Socket(ipEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -34,7 +38,7 @@ namespace ET
                 this.socket.SendBufferSize = Kcp.OneM * 64;
                 this.socket.ReceiveBufferSize = Kcp.OneM * 64;
             }
-            
+
             try
             {
                 this.socket.Bind(ipEndPoint);
@@ -46,13 +50,13 @@ namespace ET
 
             NetworkHelper.SetSioUdpConnReset(this.socket);
         }
-        
+
         public void Send(byte[] bytes, int index, int length, EndPoint endPoint, ChannelType channelType)
         {
             this.socket.SendTo(bytes, index, length, SocketFlags.None, endPoint);
         }
-        
-        public int Recv(byte[] buffer, ref EndPoint endPoint)
+
+        public int Receive(byte[] buffer, ref EndPoint endPoint)
         {
             return this.socket.ReceiveFrom(buffer, ref endPoint);
         }
@@ -87,14 +91,14 @@ namespace ET
         private readonly Dictionary<long, long> readWriteTime = new();
 
         private readonly Queue<long> channelIds = new();
-        
+
         public TcpTransport(AddressFamily addressFamily)
         {
             this.tService = new TService(addressFamily, ServiceType.Outer);
             this.tService.ErrorCallback = this.OnError;
             this.tService.ReadCallback = this.OnRead;
         }
-        
+
         public TcpTransport(IPEndPoint ipEndPoint)
         {
             this.tService = new TService(ipEndPoint, ServiceType.Outer);
@@ -106,7 +110,7 @@ namespace ET
         private void OnAccept(long id, IPEndPoint ipEndPoint)
         {
             TChannel channel = this.tService.Get(id);
-            long timeNow = TimeInfo.Instance.ClientFrameTime();
+            long timeNow = TimeInfo.Instance.Frame;
             this.readWriteTime[id] = timeNow;
             this.channelIds.Enqueue(id);
             this.idEndpoints.Add(id, channel.RemoteAddress);
@@ -119,15 +123,15 @@ namespace ET
             this.idEndpoints.RemoveByKey(id);
             this.readWriteTime.Remove(id);
         }
-        
+
         private void OnRead(long id, MemoryBuffer memoryBuffer)
         {
-            long timeNow = TimeInfo.Instance.ClientFrameTime();
+            long timeNow = TimeInfo.Instance.Frame;
             this.readWriteTime[id] = timeNow;
             TChannel channel = this.tService.Get(id);
             channelRecvDatas.Enqueue((channel.RemoteAddress, memoryBuffer));
         }
-        
+
         public void Send(byte[] bytes, int index, int length, EndPoint endPoint, ChannelType channelType)
         {
             long id = this.idEndpoints.GetKeyByValue(endPoint);
@@ -145,16 +149,17 @@ namespace ET
                     return;
                 }
             }
+
             MemoryBuffer memoryBuffer = this.tService.Fetch();
             memoryBuffer.Write(bytes, index, length);
             memoryBuffer.Seek(0, SeekOrigin.Begin);
             this.tService.Send(id, memoryBuffer);
-            
-            long timeNow = TimeInfo.Instance.ClientFrameTime();
+
+            long timeNow = TimeInfo.Instance.Frame;
             this.readWriteTime[id] = timeNow;
         }
 
-        public int Recv(byte[] buffer, ref EndPoint endPoint)
+        public int Receive(byte[] buffer, ref EndPoint endPoint)
         {
             return RecvNonAlloc(buffer, ref endPoint);
         }
@@ -176,7 +181,7 @@ namespace ET
         public void Update()
         {
             // 检查长时间不读写的TChannel, 超时断开, 一次update检查10个
-            long timeNow = TimeInfo.Instance.ClientFrameTime();
+            long timeNow = TimeInfo.Instance.Frame;
             const int MaxCheckNum = 10;
             int n = this.channelIds.Count < MaxCheckNum? this.channelIds.Count : MaxCheckNum;
             for (int i = 0; i < n; ++i)
@@ -186,14 +191,16 @@ namespace ET
                 {
                     continue;
                 }
+
                 if (timeNow - rwTime > 30 * 1000)
                 {
                     this.OnError(id, ErrorCore.ERR_KcpReadWriteTimeout);
                     continue;
                 }
+
                 this.channelIds.Enqueue(id);
             }
-            
+
             this.tService.Update();
         }
 

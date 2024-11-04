@@ -9,32 +9,38 @@ namespace ET.Server
         {
             Player player = session.GetComponent<SessionPlayerComponent>().Player;
             response.MyId = player.Id;
-
-            try
+            using (await session.Root().GetComponent<CoroutineLockComponent>().Wait(CoroutineLockType.UnitId, player.Id))
             {
-                if (player.GetComponent<GateMapComponent>() != null)
+                try
                 {
-                    return;
+                    if (player.InZone)
+                    {
+                        await session.Fiber().WaitFrameFinish();
+                        G2M_ReEnterMap message = G2M_ReEnterMap.Create();
+                        message.Id = player.Id;
+                        await session.Root().GetComponent<MessageLocationSenderComponent>().Get(LocationType.Unit).Call(player.Id, message);
+                        return;
+                    }
+
+                    (bool isNewPlayer, Unit unit) = await CacheHelper.LoadUnit(player);
+                    await CacheHelper.InitUnit(unit, player, isNewPlayer);
+
+                    (int errno, ActorId actorId, int mapId) r = await TransferHelper.GetValidMap(session.Scene(), unit);
+                    if (r.errno != ErrorCode.ERR_Success)
+                    {
+                        response.Error = r.errno;
+                        return;
+                    }
+
+                    await TransferHelper.TransferAtFrameFinish(unit, r.actorId, r.mapId, true);
+                    player.InZone = true;
                 }
-
-                (bool isNewPlayer, Unit unit) = await CacheHelper.LoadUnit(player);
-                await CacheHelper.InitUnit(unit, player, isNewPlayer);
-
-                // 等到一帧的最后面再传送，先让G2C_EnterMap返回，否则传送消息可能比G2C_EnterMap还早
-                (int errno, ActorId mapActorId) r = await MapManagerHelper.GetMapActorId(session.Scene(), ConstValue.StartMap);
-                if (r.errno != ErrorCode.ERR_Success)
+                catch (Exception e)
                 {
-                    response.Error = r.errno;
-                    return;
+                    Log.Error($"角色进入游戏服出错 {player.Account} {player.Id} {e}");
+                    response.Error = ErrorCode.ERR_EnterGame;
+                    session.Disconnect().NoContext();
                 }
-
-                await TransferHelper.TransferAtFrameFinish(unit, r.mapActorId, ConstValue.StartMap, true);
-            }
-            catch (Exception e)
-            {
-                Log.Error($"角色进入游戏服出错 {player.Account} {player.Id} {e}");
-                response.Error = ErrorCode.ERR_EnterGame;
-                session.Disconnect().NoContext();
             }
         }
     }

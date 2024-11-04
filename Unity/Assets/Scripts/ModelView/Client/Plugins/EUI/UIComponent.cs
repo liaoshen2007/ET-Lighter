@@ -39,8 +39,6 @@ namespace ET.Client
 
         public Queue<WindowID> stackWindowsQueue = new();
 
-        public long timer;
         public bool isPopStackWndStatus = false;
-        public Dictionary<string, string> atlasPath = new();
     }
 }

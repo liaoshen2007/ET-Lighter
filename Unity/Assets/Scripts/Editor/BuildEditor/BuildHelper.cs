@@ -7,13 +7,11 @@ using YooAsset.Editor;
 using BuildReport = UnityEditor.Build.Reporting.BuildReport;
 using BuildResult = UnityEditor.Build.Reporting.BuildResult;
 
-namespace ET
+namespace ET.Client
 {
     public static class BuildHelper
     {
         private const string relativeDirPrefix = "../Release";
-
-        public static string BuildFolder = "../Release/{0}/StreamingAssets/";
 
         [InitializeOnLoadMethod]
         public static void ReGenerateProjectFiles()
@@ -32,6 +30,20 @@ namespace ET
         public static void AddEnableView()
         {
             EnableDefineSymbols("ENABLE_VIEW", true);
+        }
+#endif
+
+#if UNITY_WEBGL
+        [MenuItem("ET/ChangeDefine/Remove UNITY_WEBGL", false, ETMenuItemPriority.ChangeDefine)]
+        public static void RemoveUnityWebGL()
+        {
+            EnableDefineSymbols("UNITY_WEBGL", false);
+        }
+#else
+        [MenuItem("ET/ChangeDefine/Add UNITY_WEBGL", false, ETMenuItemPriority.ChangeDefine)]
+        public static void AddUnityWebGL()
+        {
+            EnableDefineSymbols("UNITY_WEBGL", true);
         }
 #endif
         public static void EnableDefineSymbols(string symbols, bool enable)
@@ -115,6 +127,8 @@ namespace ET
 
         private static void BuildInternal(bool forceRebuild)
         {
+            AssemblyTool.MenuItemOfCompile();
+            ResCheck.SpriteAtlasToJson();
             var buildTarget = EditorUserBuildSettings.activeBuildTarget;
             var isWebGL = buildTarget == BuildTarget.WebGL;
             Debug.Log($"开始构建 : {buildTarget}");
@@ -137,15 +151,40 @@ namespace ET
             buildParameters.BuildinFileCopyParams = string.Empty;
             buildParameters.CompressOption = ECompressOption.LZ4;
 
-            Directory.Delete($"{buildParameters.BuildOutputRoot}/{buildTarget}", true);
+            string outPath = $"{buildParameters.BuildOutputRoot}/{buildTarget}";
+            if (Directory.Exists(outPath))
+            {
+                Directory.Delete($"{buildParameters.BuildOutputRoot}/{buildTarget}", true);
+            }
+
             // 执行构建
-            ScriptableBuildPipeline pipeline = new();
+            ETBuildPipeline pipeline = new();
             var buildResult = pipeline.Run(buildParameters, true);
             if (buildResult.Success)
             {
                 Debug.Log($"构建成功 : {buildResult.OutputPackageDirectory}");
-                string dstPath = @"E:\Download\Bundles\PC\1.0.0\";
-                Directory.Delete(dstPath, true);
+                string dstPath = "";
+                switch (buildTarget)
+                {
+                    case BuildTarget.Android:
+                        dstPath = @"E:\Download\Bundles\Android\1.0.0\";
+                        break;
+                    case BuildTarget.iOS:
+                        dstPath = @"E:\Download\Bundles\IPhone\1.0.0\";
+                        break;
+                    case BuildTarget.WebGL:
+                        dstPath = @"E:\Download\Bundles\WebGL\1.0.0\";
+                        break;
+                    default:
+                        dstPath = @"E:\Download\Bundles\PC\1.0.0\";
+                        break;
+                }
+
+                if (Directory.Exists(dstPath))
+                {
+                    Directory.Delete(dstPath, true);
+                }
+
                 FileHelper.CopyDirectory(buildResult.OutputPackageDirectory, dstPath);
             }
             else
@@ -154,7 +193,7 @@ namespace ET
             }
         }
 
-        [MenuItem("ET/Pkg/打包(Yoo)", false)]
+        [MenuItem("ET/Pkg/打包(Yoo) _F5", false)]
         public static void BuildPackage()
         {
             BuildInternal(false);
@@ -166,12 +205,38 @@ namespace ET
             BuildInternal(true);
         }
 
+        [MenuItem("ET/Pkg/ClearAndCopyAll", false)]
+        public static void ClearAndCopyAll()
+        {
+            var buildTarget = EditorUserBuildSettings.activeBuildTarget;
+            string dstPath = AssetBundleBuilderHelper.GetStreamingAssetsRoot();
+            FileHelper.ClearDirectory(dstPath);
+            string outPath = $"{AssetBundleBuilderHelper.GetDefaultBuildOutputRoot()}/{buildTarget}/{Define.DefPackageName}";
+            foreach (string directory in Directory.GetDirectories(outPath))
+            {
+                var p = PathHelper.NormalizePath(directory).Split("/").Last();
+                if (p.StartsWith(DateTime.Now.ToString("yyyy-MM-dd")))
+                {
+                    FileHelper.CopyDirectory(directory, $"{dstPath}/{Define.DefPackageName}");
+                }
+            }
+
+            AssetDatabase.Refresh();
+        }
+
         [MenuItem("ET/Pkg/清理下载缓存", false)]
         public static void ClearCache()
         {
             string projectPath = Path.GetDirectoryName(Application.dataPath);
-            string p = Path.Combine(projectPath, "Bundles/DefaultPackage");
+            string p = Path.Combine(projectPath, $"Bundles/{Define.DefPackageName}");
             Directory.Delete(p, true);
+        }
+
+        [MenuItem("YooAsset/打开构建目录", false)]
+        public static void OpenBundleDirectory()
+        {
+            string path = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
+            EditorUtility.RevealInFinder($"{path}/{EditorUserBuildSettings.activeBuildTarget}/");
         }
     }
 }
