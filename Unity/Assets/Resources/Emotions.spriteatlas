@@ -44,6 +44,7 @@ SpriteAtlas:
       m_CrunchedCompression: 1
       m_AllowsAlphaSplitting: 0
       m_Overridden: 1
+      m_IgnorePlatformSupport: 0
       m_AndroidETC2FallbackOverride: 0
       m_ForceMaximumCompressionQuality_BC6H_BC7: 0
     - serializedVersion: 3
@@ -56,6 +57,7 @@ SpriteAtlas:
       m_CrunchedCompression: 1
       m_AllowsAlphaSplitting: 0
       m_Overridden: 1
+      m_IgnorePlatformSupport: 0
       m_AndroidETC2FallbackOverride: 0
       m_ForceMaximumCompressionQuality_BC6H_BC7: 0
     - serializedVersion: 3
@@ -68,6 +70,7 @@ SpriteAtlas:
       m_CrunchedCompression: 1
       m_AllowsAlphaSplitting: 0
       m_Overridden: 1
+      m_IgnorePlatformSupport: 0
       m_AndroidETC2FallbackOverride: 0
       m_ForceMaximumCompressionQuality_BC6H_BC7: 0
     - serializedVersion: 3
@@ -80,6 +83,7 @@ SpriteAtlas:
       m_CrunchedCompression: 1
       m_AllowsAlphaSplitting: 0
       m_Overridden: 1
+      m_IgnorePlatformSupport: 0
       m_AndroidETC2FallbackOverride: 0
       m_ForceMaximumCompressionQuality_BC6H_BC7: 0
     packingSettings:
